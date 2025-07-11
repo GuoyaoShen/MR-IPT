@@ -1,4 +1,5 @@
 # Code borrowed from: https://github.com/facebookresearch/segment-anything
+# Code has been customized
 
 import torch
 from torch import nn
