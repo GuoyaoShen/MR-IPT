@@ -1,16 +1,29 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from einops import rearrange
 
 
 def get_error_map(target, pred):
+    """Return element-wise absolute error map.
+
+    Args:
+        target: Ground-truth tensor of shape `(B, C, H, W)`.
+        pred: Predicted tensor of shape `(B, C, H, W)`.
+
+    Returns:
+        Tensor of shape `(B, C, H, W)` containing `abs(target - pred)`.
+    """
     error = abs(target - pred)
     return error
 
 
 class SSIM(nn.Module):
     """
-    SSIM module. From fastMRI SSIM loss
+    Structural Similarity (SSIM) metric.
+
+    Implementation is adapted from the fastMRI SSIM loss formulation and
+    returns one SSIM score per batch item.
     """
 
     def __init__(self, win_size: int = 7, k1: float = 0.01, k2: float = 0.03):
@@ -28,6 +41,16 @@ class SSIM(nn.Module):
         self.cov_norm = NP / (NP - 1)
 
     def forward(self, X: torch.Tensor, Y: torch.Tensor, data_range: torch.Tensor):
+        """Compute SSIM score for each sample in a batch.
+
+        Args:
+            X: Predicted image tensor of shape `(B, C, H, W)`.
+            Y: Target image tensor of shape `(B, C, H, W)`.
+            data_range: Per-sample dynamic range tensor of shape `(B,)`.
+
+        Returns:
+            Tensor of shape `(B,)` with SSIM values.
+        """
         assert isinstance(self.w, torch.Tensor)
 
         data_range = data_range[:, None, None, None]
@@ -49,29 +72,58 @@ class SSIM(nn.Module):
         )
         D = B1 * B2
         S = (A1 * A2) / D
-        S = S.view(S.shape[0], S.shape[-2] * S.shape[-1])
+        S = rearrange(S, "b c h w -> b (c h w)")
 
         return S.mean(dim=1)
 
 
 class PSNR(nn.Module):
+    """Peak Signal-to-Noise Ratio (PSNR) metric.
+
+    Returns one PSNR value per batch item.
+    """
+
     def __init__(self, ):
         super().__init__()
 
     def forward(self, X: torch.Tensor, Y: torch.Tensor, data_range: torch.Tensor):
+        """Compute per-sample PSNR.
+
+        Args:
+            X: Predicted image tensor of shape `(B, C, H, W)`.
+            Y: Target image tensor of shape `(B, C, H, W)`.
+            data_range: Per-sample dynamic range tensor of shape `(B,)`.
+
+        Returns:
+            Tensor of shape `(B,)` with PSNR values in dB.
+        """
         # Y is target
-        err = ((X - Y) ** 2).reshape(X.shape[0], X.shape[1] * X.shape[2] * X.shape[3])
+        err = rearrange((X - Y) ** 2, "b c h w -> b (c h w)")
         mse = torch.mean(err, dim=1)
         return (10 * torch.log10(data_range ** 2 / mse))
 
 
 class NMSE(nn.Module):
+    """Normalized Mean Squared Error (NMSE) metric.
+
+    Returns one NMSE value per batch item.
+    """
+
     def __init__(self, ):
         super().__init__()
 
     def forward(self, X, Y):
+        """Compute per-sample NMSE.
+
+        Args:
+            X: Predicted image tensor of shape `(B, C, H, W)`.
+            Y: Target image tensor of shape `(B, C, H, W)`.
+
+        Returns:
+            Tensor of shape `(B,)` with NMSE values.
+        """
         # Y is target
-        err = (Y - X).reshape(X.shape[0], X.shape[1] * X.shape[2] * X.shape[3])
+        err = rearrange(Y - X, "b c h w -> b (c h w)")
         err = (err ** 2).sum(dim=-1)
-        den = (Y.reshape(Y.shape[0], Y.shape[1] * Y.shape[2] * Y.shape[3]) ** 2).sum(dim=-1)
+        den = (rearrange(Y, "b c h w -> b (c h w)") ** 2).sum(dim=-1)
         return err / den

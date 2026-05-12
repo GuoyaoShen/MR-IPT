@@ -8,7 +8,7 @@ from torch import nn
 from torch.nn import functional as F
 
 
-from .common import LayerNorm2d
+from modeling.common import LayerNorm2d
 
 
 class ImageDecoder(nn.Module):

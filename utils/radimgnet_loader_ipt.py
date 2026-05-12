@@ -2,13 +2,12 @@ import torch
 import torchvision.transforms as transforms
 import os
 import numpy as np
+from PIL import Image
 
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 from torch.utils.data import Dataset
 from utils.transform_util import *
-# from fastmri.data import transforms
-from PIL import Image
 
 
 def _list_images_recursive(root_dir):

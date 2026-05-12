@@ -8,7 +8,7 @@ from torch import Tensor, nn
 
 import math
 
-from .common import MLPBlock
+from modeling.common import MLPBlock
 
 
 # this is from window transformer in SAM
