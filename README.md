@@ -23,14 +23,30 @@ highlighting its potential as a scalable and efficient solution for accelerated 
 suggest that transformer-based general models can significantly advance MRI restoration, offering 
 improved adaptability and stability compared to traditional deep learning approaches.
 
-
 ### MR-IPT Framework
 <p align="center">
-    <img src="/figs/fig1.png" width="500" />
+    <img src="figs/fig1.png" width="500" />
 </p>
 
 ### Reconstruction Examples
 <p align="center">
-    <img src="/figs/fig2.png" width="1000" />
-    <img src="/figs/fig3.png" width="500" />
+    <img src="figs/fig2.png" width="1000" />
+    <img src="figs/fig3.png" width="500" />
 </p>
+
+## Quick Start
+
+### Option 1: Start with uv (recommended)
+
+```bash
+uv venv .venv
+uv pip install --python .venv/bin/python -r requirements.txt
+```
+
+### Option 2: Start with pip
+
+```bash
+python -m venv .venv
+. .venv/bin/activate
+python -m pip install -r requirements.txt
+```

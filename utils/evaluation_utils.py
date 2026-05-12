@@ -1,10 +1,6 @@
-import numpy as np
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchmetrics.functional import peak_signal_noise_ratio as psnr_tensor
-from torchmetrics.functional import structural_similarity_index_measure as ssim_tensor
 
 
 def get_error_map(target, pred):
