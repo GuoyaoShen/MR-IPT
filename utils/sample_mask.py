@@ -8,12 +8,11 @@ from scipy.stats import norm
 
 @contextlib.contextmanager
 def temp_seed(rng, seed):
-    """
-    fixed random function given seed
+    """Temporarily set RNG seed within a context.
 
-    :param rng: numpy random function
-    :param seed: int, seed number
-    :return: random function with given random seed
+    Args:
+        rng: NumPy random generator module/object.
+        seed: Seed value to apply during the context.
     """
     state = rng.get_state()
     rng.seed(seed)
@@ -24,12 +23,14 @@ def temp_seed(rng, seed):
 
 
 def center_crop_np(img, bounding):
-    """
-    center crop an image given bounding size
+    """Center-crop a NumPy array to the requested bounding shape.
 
-    :param img: image of size (..., H, W)
-    :param bounding: int, bounding size for center cropping
-    :return: center crop image with size (..., bounding, bounding)
+    Args:
+        img: Input array with trailing spatial dimensions.
+        bounding: Target crop shape tuple.
+
+    Returns:
+        Center-cropped array.
     """
     start = tuple(map(lambda a, da: a // 2 - da // 2, img.shape, bounding))
     end = tuple(map(operator.add, start, bounding))
@@ -38,22 +39,7 @@ def center_crop_np(img, bounding):
 
 
 class RandomMask():
-    """
-    random column wise strip masking
-
-    Args:
-    ----------
-    center_fractions : list of float
-        fraction of low-frequency columns to be retained. If multiple values are provided, then one of these
-    accelerations : list of int
-        amount of under-sampling. This should have the same length as center_fractions. If multiple values are provided,
-         then one of these is chosen uniformly each time.
-    size : (iterable[int])
-        the shape of the mask to be created.
-    seed : (int, optional)
-       seed for the random number generator. Setting the seed ensures the same mask is generated each time for the same
-       shape. The random state is reset afterwards.
-    """
+    """Random column-wise strip mask."""
     def __init__(self, center_fraction, acceleration, size, seed=None):
         self.center_fraction = center_fraction
         self.acceleration = acceleration
@@ -62,12 +48,12 @@ class RandomMask():
         self.rng = np.random
 
     def __call__(self):
-        """
-        Create the mask.
+        """Create a random strip mask.
 
-        :return: mask, numpy, a mask of the specified shape. Its shape should be
-                (C, height, width) and the two channels are the same;
-                mask_fold, numpy, a folded mask with shape of (C,  height/patch_size_H, width/patch_size_W)
+        Returns:
+            Tuple ``(mask, mask_fold)`` where:
+            - ``mask`` has shape ``(C, H, W)``
+            - ``mask_fold`` has shape ``(C, 1, W)``
         """
         with temp_seed(self.rng, self.seed):
             num_cols = self.size[-1]
@@ -91,22 +77,7 @@ class RandomMask():
 
 
 class RandomMask2D():
-    """
-    random pixel wise masking
-
-    Args:
-    ----------
-    center_fractions : list of float
-        fraction of low-frequency columns to be retained. If multiple values are provided, then one of these
-    accelerations : list of int
-        amount of under-sampling. This should have the same length as center_fractions. If multiple values are provided,
-         then one of these is chosen uniformly each time.
-    size : (iterable[int])
-        the shape of the mask to be created.
-    seed : (int, optional)
-       seed for the random number generator. Setting the seed ensures the same mask is generated each time for the same
-       shape. The random state is reset afterwards.
-    """
+    """Random pixel-wise 2D mask."""
     def __init__(self, center_fraction, acceleration, size, seed=None):
         self.center_fraction = center_fraction
         self.acceleration = acceleration
@@ -115,12 +86,11 @@ class RandomMask2D():
         self.rng = np.random
 
     def __call__(self):
-        """
-        Create the mask.
+        """Create a random pixel-wise mask.
 
-        :return: mask, numpy, a mask of the specified shape. Its shape should be
-                (C, height, width) and the two channels are the same;
-                mask_fold, numpy, a folded mask with shape of (C,  height/patch_size_H, width/patch_size_W)
+        Returns:
+            Tuple ``(mask, mask_fold)`` where both arrays have shape
+            ``(C, H, W)``.
         """
         with temp_seed(self.rng, self.seed):
             D, H, W = self.size
@@ -149,22 +119,7 @@ class RandomMask2D():
 
 
 class EquiSpaceMask():
-    """
-    equi-space column wise strip masking
-
-    Args:
-    ----------
-    center_fractions : list of float
-        fraction of low-frequency columns to be retained. If multiple values are provided, then one of these
-    accelerations : list of int
-        amount of under-sampling. This should have the same length as center_fractions. If multiple values are provided,
-         then one of these is chosen uniformly each time.
-    size : (iterable[int])
-        the shape of the mask to be created.
-    seed : (int, optional)
-       seed for the random number generator. Setting the seed ensures the same mask is generated each time for the same
-       shape. The random state is reset afterwards.
-    """
+    """Equi-spaced column-wise strip mask."""
     def __init__(self, center_fraction, acceleration, size, seed=None):
         self.center_fraction = center_fraction
         self.acceleration = acceleration
@@ -173,12 +128,12 @@ class EquiSpaceMask():
         self.rng = np.random
 
     def __call__(self):
-        """
-        Create the mask.
+        """Create an equi-spaced strip mask.
 
-        :return: mask, numpy, a mask of the specified shape. Its shape should be
-                (C, height, width) and the two channels are the same;
-                mask_fold, numpy, a folded mask with shape of (C,  height/patch_size_H, width/patch_size_W)
+        Returns:
+            Tuple ``(mask, mask_fold)`` where:
+            - ``mask`` has shape ``(C, H, W)``
+            - ``mask_fold`` has shape ``(C, 1, W)``
         """
         with temp_seed(self.rng, self.seed):
             num_cols = self.size[-1]
@@ -205,9 +160,7 @@ class EquiSpaceMask():
 
 
 class RandomMaskGaussian1D:
-    """
-    1D Gaussian sampling.
-    """
+    """1D Gaussian mask sampler wrapper."""
     def __init__(
             self,
             acceleration=4,
@@ -251,25 +204,22 @@ def random_mask_gaussian_1D(
         concentration=3,
         patch_size=4,
 ):
-    """
-    random_mask_gaussian_diffusion1D creates a 1D sub-sampling gaussian mask of a given shape for diffusion
+    """Create a 1D Gaussian subsampling mask.
 
-    :param acceleration: float, undersample percentage 4X fold or 8X fold, default 4
-    :param center_fraction: float, fraction of square center area left unmasked, defualt 0.08
-    :param size: [B, H, W], output size for random gaussian mask, default [16, 320, 320]
-    :param seed: None, int or [int, ...], seed for the random number generator. Setting the seed ensures the same mask
-                is generated each time for the same seed number. The random state is reset afterwards. None for totally
-                random, int for fixed seed across different batches, list of int for fixed seed of each slices in each
-                batches. Default None
-    :param mean: optional [int], gaussian mean on W channel. default [0]
-    :param cov: optional 1X gaussian covariance matrix on W channel. default [[1]], note it assume
-                independent dimensional covariance
-    :param concentration: optional int, scale which indicates the size of area to concentrate on. default 3
-    :param patch_size: optional int, size of each square pixel-wise mask, default 4
-    :return: mask, numpy, a mask of the specified shape. Its shape should be (C, height, width) and the two channels are
-            the same; mask_fold, numpy, a folded mask with shape of (C,  height/patch_size_H, width/patch_size_W)
+    Args:
+        acceleration: Undersampling acceleration factor.
+        center_fraction: Fraction of low-frequency center retained.
+        size: Output shape ``(B, H, W)``.
+        seed: ``None``, int, or list of ints for deterministic sampling.
+        mean: Gaussian mean over width axis.
+        cov: Gaussian covariance over width axis.
+        concentration: Sampling concentration range in Gaussian std-space.
+        patch_size: Upsampling factor from folded mask to image grid.
 
-
+    Returns:
+        Tuple ``(masks, masks_fold)`` where:
+        - ``masks`` has shape ``(B, H, W)``
+        - ``masks_fold`` has shape ``(B, H // patch_size, W // patch_size)``
     """
     B, H, W = size
     if H != W:
@@ -328,9 +278,7 @@ def random_mask_gaussian_1D(
 
 
 class RandomMaskGaussian:
-    """
-    2D Gaussian sampling.
-    """
+    """2D Gaussian mask sampler wrapper."""
     def __init__(
             self,
             acceleration=4,
@@ -374,25 +322,22 @@ def random_mask_gaussian(
         concentration=3,
         patch_size=4,
 ):
-    """
-    random_mask_gaussian_diffusion creates a sub-sampling gaussian mask of a given shape for diffusion
+    """Create a 2D Gaussian subsampling mask.
 
-    :param acceleration: float, undersample percentage 4X fold or 8X fold, default 4
-    :param center_fraction: float, fraction of square center area left unmasked, defualt 0.08
-    :param size: [B, H, W], output size for random gaussian mask, default [16, 320, 320]
-    :param seed: None, int or [int, ...], seed for the random number generator. Setting the seed ensures the same mask
-                is generated each time for the same seed number. The random state is reset afterwards. None for totally
-                random, int for fixed seed across different batches, list of int for fixed seed of each slices in each
-                batches. Default None
-    :param mean: optional [int, int], gaussian mean on H, W channel. default [0, 0]
-    :param cov: optional 2X2 gaussian covariance matrix on H, W channel. default [[1, 0], [0, 1]], note it assume
-                independent dimensional covariance
-    :param concentration: optional int, scale which indicates the size of area to concentrate on. default 3
-    :param patch_size: optional int, size of each square pixel-wise mask, default 4
-    :return: mask, numpy, a mask of the specified shape. Its shape should be (C, height, width) and the two channels are
-            the same; mask_fold, numpy, a folded mask with shape of (C,  height/patch_size_H, width/patch_size_W)
+    Args:
+        acceleration: Undersampling acceleration factor.
+        center_fraction: Fraction of low-frequency center retained.
+        size: Output shape ``(B, H, W)``.
+        seed: ``None``, int, or list of ints for deterministic sampling.
+        mean: Gaussian mean over height/width axes.
+        cov: Gaussian covariance over height/width axes.
+        concentration: Sampling concentration range in Gaussian std-space.
+        patch_size: Upsampling factor from folded mask to image grid.
 
-
+    Returns:
+        Tuple ``(masks, masks_fold)`` where:
+        - ``masks`` has shape ``(B, H, W)``
+        - ``masks_fold`` has shape ``(B, H // patch_size, W // patch_size)``
     """
     B, H, W = size
     if H != W:

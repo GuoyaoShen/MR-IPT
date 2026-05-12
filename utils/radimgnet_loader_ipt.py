@@ -1,14 +1,26 @@
 import torch
 import torchvision.transforms as transforms
+import os
+import numpy as np
 
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
-from imutils import paths
-from help_func import print_var_detail
 from torch.utils.data import Dataset
 from utils.transform_util import *
 # from fastmri.data import transforms
 from PIL import Image
+
+
+def _list_images_recursive(root_dir):
+    """Return all image file paths under ``root_dir`` recursively."""
+    image_exts = {'.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff', '.webp'}
+    image_paths = []
+    for root, _, files in os.walk(root_dir):
+        for name in files:
+            ext = os.path.splitext(name)[1].lower()
+            if ext in image_exts:
+                image_paths.append(os.path.join(root, name))
+    return image_paths
 
 
 def create_radimgnet_dataloader_multi(
@@ -23,27 +35,31 @@ def create_radimgnet_dataloader_multi(
         func_list=[None],
         num_workers=0,
         fix_scale_idx=None,
+        prefetch_factor=2,
+        persistent_workers=True,
+        use_precomputed_mask=False,
 ):
-    """
-    Create a dataloader for MRIPT RadImageNet dataset.
-    Supports multi-scale undersamplings.
+    """Create a RadImageNet dataloader for MRIPT.
 
-    :param data_dir: str, the directory saving data.
-    :param random_seed: int, random seed to control any randomization in the dataset
-    :param val_split: float, validation size of the dataset in percent, 0.1 gives 10% of the data
-    :param image_size: int, unify image size for all input images to (image_size, image_size)
-    :param batch_size: int, batch size for dataloader
-    :param is_distributed: bool, whether to use distributed sampler
-    :param is_train: bool, whether used for training
-    :param scales: list of int, given scale size during image processing
-    :param func_list: list of func, store functions used to preprocess image for each head-tail
-    :param num_workers: int, number of workers if using multiple GPU, default 0
-    :param if_rand_param: bool, use random parameters such as acceleration or center ratio, etc.
-    :param fix_scale_idx: int, if it is not None, fix the scaling of the image and preprocess function to
-            that particular index, meaning dataset will only use one downsampling regardless of the rest of functions in
-            func_list.
+    Args:
+        data_dir: Root directory containing images.
+        random_seed: Seed used for deterministic train/validation splitting.
+        val_split: Fraction of samples reserved for validation.
+        image_size: Output image size as ``(height, width)``.
+        batch_size: Loader batch size.
+        is_distributed: Whether to wrap dataset with ``DistributedSampler``.
+        is_train: Whether this loader is for training mode.
+        scales: Per-type scale configuration used by MRIPT heads/tails.
+        func_list: Per-type/per-level preprocessing callables.
+        num_workers: Number of dataloader worker processes.
+        fix_scale_idx: Optional fixed ``(type_idx, level_idx)``.
+        prefetch_factor: Number of prefetched batches per worker.
+        persistent_workers: Keep workers alive between epochs.
+        use_precomputed_mask: Reuse one precomputed mask for each
+            ``(type_idx, level_idx)`` combination.
 
-    :return: fastmri loader for ipt trainer, output format determined by fastmri dataset
+    Returns:
+        ``torch.utils.data.DataLoader`` with MRIPT trainer-compatible tuples.
     """
 
     if not data_dir:
@@ -59,14 +75,15 @@ def create_radimgnet_dataloader_multi(
         func_list=func_list,
         fix_scale_idx=fix_scale_idx,
         is_train=is_train,
+        use_precomputed_mask=use_precomputed_mask,
     )
 
     data_sampler = None
     if is_distributed:
         data_sampler = DistributedSampler(dataset)
 
-    loader = DataLoader(
-        dataset,
+    loader_kwargs = dict(
+        dataset=dataset,
         batch_size=batch_size,
         shuffle=(data_sampler is None) and is_train,
         sampler=data_sampler,
@@ -74,54 +91,28 @@ def create_radimgnet_dataloader_multi(
         drop_last=is_train,
         pin_memory=True,
     )
+    if num_workers > 0:
+        loader_kwargs["prefetch_factor"] = prefetch_factor
+        loader_kwargs["persistent_workers"] = persistent_workers
+
+    loader = DataLoader(**loader_kwargs)
 
     # return loader
     return loader
 
 
 class RadimgnetDataSetMulti(Dataset):
-    """
-    A customized dataset class used to create and preprocess RadImageNet data for MRIPT training.
-    Supports multi-scale undersamplings.
-    get_item outputs list of input and target image pairs, list of filename and list of slice index
+    """RadImageNet dataset used by MRIPT.
 
-    Args:
-    ----------
-    data_dir : str
-        the directory saving data.
-    data_info_list : list
-        a list containing elements like (file_name, index). A .h5 file contains multi slices.
-    random_flip : bool
-        whether to random flip image.
-    mask_func : function
-        mask function applied on kspace, normally use fastmri.subsample.RandomMaskFunc.
-    post_process : function
-        used to post-process image, image_zf, kspace, kspace_zf and mask.
-    patch_size: int
-        desired patch size
-    scales: list of int
-        given scale size during image processing
-    center_crop_size : int
-        determine the center crop size of image and reconvert to kspace if necessary
-    num_layer: int,
-        number of layers for model to up/down sample
-    step_scale: int,
-        scale of each layer for model to up/down sample
-    target_mode: str,
-        target mri, 'single' for single-coil (reconstruction_esc), or 'multi' for multi-coil
-        (reconstruction_rss).
-    output_mode: str,
-        'img' or 'kspace'. Whether input and target are recovered mri img or raw k-space data.
-    norm_mode: str,
-        'unit_norm' or None. Whether to normalize output.
-    func_list: list of function lists
-        store functions used to preprocess image for each head-tail
+    Each sample returns a tuple formatted for ``TrainerMulti``:
+    ``((image_input, image_target), level_idx, filename, idx, mask, type_idx)``.
     """
 
     def __init__(
             self,
             data_dir, random_seed, val_split, image_size, scales,
-            func_list, fix_scale_idx, is_train
+            func_list, fix_scale_idx, is_train,
+            use_precomputed_mask=False,
     ):
 
         self.data_dir = data_dir
@@ -132,12 +123,13 @@ class RadimgnetDataSetMulti(Dataset):
         self.func_list = func_list
         self.fix_scale_idx = fix_scale_idx
         self.is_train = is_train
+        self.use_precomputed_mask = use_precomputed_mask
 
         if not len(self.func_list) == len(self.scales):
             raise ValueError("unequal number of scales and function list.")
 
         # construct training and validation dataset
-        imagePaths = list(paths.list_images(self.data_dir))
+        imagePaths = _list_images_recursive(self.data_dir)
         np.random.seed(self.random_seed)
         np.random.shuffle(imagePaths)
 
@@ -148,6 +140,61 @@ class RadimgnetDataSetMulti(Dataset):
         print('train size: ' + str(len(self.trainPaths)))
         print('validation size: ' + str(len(self.valPaths)))
 
+        # Build reusable transform once instead of re-creating it in __getitem__.
+        transform_ops = []
+        if self.is_train:
+            transform_ops.extend([
+                transforms.RandomHorizontalFlip(p=0.5),
+                transforms.RandomVerticalFlip(p=0.5),
+                transforms.RandomRotation(degrees=15),
+            ])
+        transform_ops.append(transforms.Resize(size=self.image_size))
+        transform_ops.append(transforms.PILToTensor())
+        self.image_transform = transforms.Compose(transform_ops)
+
+        # Optional cache for deterministic masks (same type/level and image size).
+        self.precomputed_masks = {}
+        if self.use_precomputed_mask:
+            self._build_precomputed_masks()
+
+    def _build_precomputed_masks(self):
+        """Precompute one deterministic mask per ``(type_idx, level_idx)``.
+
+        Logic:
+            - Build a synthetic sample matching the configured image size.
+            - For each preprocessing function in ``func_list``, run it once.
+            - Cache only the mask in ``self.precomputed_masks``.
+
+        During ``__getitem__``, when ``use_precomputed_mask`` is enabled, the
+        cached mask for the selected ``(type_idx, level_idx)`` is reused for all
+        samples in that bucket. This improves speed but reduces mask randomness.
+        """
+        sample = torch.zeros((1, self.image_size[0], self.image_size[1]), dtype=torch.float32)
+        for i_type in range(len(self.scales)):
+            for i_level in range(len(self.scales[i_type])):
+                func = self.func_list[i_type][i_level]
+                if func is None:
+                    continue
+                _, _, mask = func(sample)
+                self.precomputed_masks[(i_type, i_level)] = mask.to(torch.float32)
+
+    def _apply_precomputed_mask(self, image_process, mask):
+        """Apply a cached mask in k-space and return reconstructed magnitude.
+
+        Args:
+            image_process: Tensor shaped ``[1, H, W]``.
+            mask: Cached mask tensor shaped ``[1, H, W]``.
+
+        Returns:
+            Tuple of ``(image_abs, mask)`` where ``image_abs`` is the masked
+            reconstruction magnitude with shape ``[1, H, W]``.
+        """
+        kspace = torch.view_as_real(torch.fft.fftshift(torch.fft.fft2(image_process[0])))[None, ...]
+        masked_kspace = kspace * mask.unsqueeze(-1)
+        image_masked = torch.fft.ifft2(torch.view_as_complex(masked_kspace))
+        image_abs = abs(image_masked.squeeze(0)).unsqueeze(0)
+        return image_abs, mask
+
     def __len__(self):
         if self.is_train:
             return len(self.trainPaths)
@@ -157,23 +204,13 @@ class RadimgnetDataSetMulti(Dataset):
     def __getitem__(self, idx):
         # load image data
         if self.is_train:
-            image = Image.open(self.trainPaths[idx])
             filename = self.trainPaths[idx]
         else:
-            image = Image.open(self.valPaths[idx])
             filename = self.valPaths[idx]
 
-        # Define a transform to convert PIL
-        # image to a Torch tensor
-        transform_toTensor = transforms.Compose([
-            transforms.PILToTensor()
-        ])
+        with Image.open(filename) as image:
+            image = self.image_transform(image)[0].unsqueeze(0)
 
-        # transform = transforms.PILToTensor()
-        # Convert the PIL image to Torch tensor
-        transform_resize = transforms.Resize(size=self.image_size)
-        image = transform_resize(image)
-        image = transform_toTensor(image)[0].unsqueeze(0)
         image = image / 255.0  # assume input image scale 0-255
 
         # use the same normalize as fastmri
@@ -187,13 +224,15 @@ class RadimgnetDataSetMulti(Dataset):
             idx_sample_type = self.fix_scale_idx[0]
         else:
             idx_sample_type = torch.randint(0, len(self.scales), (1,)).squeeze(-1)
+        idx_sample_type_i = int(idx_sample_type) if not isinstance(idx_sample_type, torch.Tensor) else int(idx_sample_type.item())
 
         # random pick a level of a downsample type
         if self.fix_scale_idx:
             idx_scale = self.fix_scale_idx[1]
         else:
-            idx_scale = torch.randint(0, len(self.scales[idx_sample_type]), (1,)).squeeze(-1)
-        scale = self.scales[idx_sample_type][idx_scale]
+            idx_scale = torch.randint(0, len(self.scales[idx_sample_type_i]), (1,)).squeeze(-1)
+        idx_scale_i = int(idx_scale) if not isinstance(idx_scale, torch.Tensor) else int(idx_scale.item())
+        scale = self.scales[idx_sample_type_i][idx_scale_i]
 
         # scale images
         if scale != 1:
@@ -205,8 +244,11 @@ class RadimgnetDataSetMulti(Dataset):
 
         mask = torch.zeros_like(image_process)
         # preprocess images
-        if self.func_list[idx_sample_type][idx_scale]:
-            func = self.func_list[idx_sample_type][idx_scale]
+        cache_key = (idx_sample_type_i, idx_scale_i)
+        if self.use_precomputed_mask and cache_key in self.precomputed_masks:
+            image_process, mask = self._apply_precomputed_mask(image_process, self.precomputed_masks[cache_key])
+        elif self.func_list[idx_sample_type_i][idx_scale_i]:
+            func = self.func_list[idx_sample_type_i][idx_scale_i]
             image_process, _, mask = func(image_process)  # [1, H, W], complex value
 
         image_process = abs(image_process.squeeze(0)).unsqueeze(0)  # [1, H, W]
@@ -215,4 +257,4 @@ class RadimgnetDataSetMulti(Dataset):
         image = image.to(torch.float32)
         pair = (image_process, image)
 
-        return pair, idx_scale, filename, idx, mask, idx_sample_type
+        return pair, idx_scale_i, filename, idx, mask, idx_sample_type_i
