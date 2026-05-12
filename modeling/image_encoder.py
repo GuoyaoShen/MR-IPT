@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-from .common import LayerNorm2d, MLPBlock
+from modeling.common import LayerNorm2d, MLPBlock
 
 
 # This class and its supporting functions below are lightly adapted from the

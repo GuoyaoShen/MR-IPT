@@ -4,9 +4,9 @@ import math
 
 import torch
 import torch.nn as nn
-from .image_encoder import ImageEncoderViT
-from .prompt_encoder import PromptEncoderMulti
-from .image_decoder import ImageDecoderMulti
+from modeling.image_encoder import ImageEncoderViT
+from modeling.prompt_encoder import PromptEncoderMulti
+from modeling.image_decoder import ImageDecoderMulti
 
 
 def default_conv(in_channels, out_channels, kernel_size, bias=True):

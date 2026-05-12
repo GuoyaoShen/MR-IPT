@@ -261,8 +261,7 @@ class TrainerMulti:
                 # evaluation metrics
                 tg = images_target.detach()
                 pred = sr.detach()  # [B,C(1),H,W]
-
-                # print('pred.shape:', pred.shape)
+                
                 nmse_ = NMSE().to(self.device)
                 ssim_ = SSIM().to(self.device)
                 psnr_ = PSNR().to(self.device)

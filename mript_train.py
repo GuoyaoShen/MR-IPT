@@ -8,6 +8,7 @@ import torch.nn as nn
 from utils.help_func import create_path
 from modeling.image_decoder import ImageDecoderMulti
 from modeling.image_encoder import ImageEncoderViT
+from modeling.losses import MixedL1GradientLoss
 from modeling.mript import MRIPT
 from modeling.mript_trainer import TrainerMulti
 from modeling.prompt_encoder import PromptEncoderMulti
@@ -178,7 +179,7 @@ def build_model(scales, input_height, mode, device):
 def parse_args():
     parser = argparse.ArgumentParser(description="Train MRIPT from script converted from mript_train.ipynb")
     parser.add_argument("--dataset-path", type=str, default="/bigdata/RadImageNet/rin2d/radiology_ai/MR/brain/normal")
-    parser.add_argument("--device", type=str, default="cuda:1", help="Torch device string, e.g. cpu, cuda:0, cuda:1")
+    parser.add_argument("--device", type=str, default="cuda:0", help="Torch device string, e.g. cpu, cuda:0, cuda:1")
     parser.add_argument("--input-height", type=int, default=128)
     parser.add_argument("--input-width", type=int, default=128)
     parser.add_argument("--val-split", type=float, default=0.1)
@@ -189,6 +190,13 @@ def parse_args():
     parser.add_argument("--use-precomputed-mask", action="store_true", default=False, help="Precompute and reuse masks per type/level to reduce loader overhead")
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--learning-rate", type=float, default=1e-5)
+    parser.add_argument(
+        "--loss",
+        type=str,
+        default="l1",
+        choices=["l1", "l2", "mixed_l1_grad"],
+        help="Loss type",
+    )
     parser.add_argument("--num-epoch", type=int, default=5)
     parser.add_argument("--mode", type=str, default="type", choices=["type", "level", "combine"])
     parser.add_argument("--path-model", type=str, default="./saved_models/", help="Directory where model checkpoints are saved")
@@ -252,7 +260,13 @@ def main():
     print("PATH_MODEL:", args.path_model)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate, amsgrad=False)
-    criterion = nn.L1Loss()
+    if args.loss == "mixed_l1_grad":
+        criterion = MixedL1GradientLoss(gradient_weight=0.1)
+    elif args.loss == "l2":
+        criterion = nn.MSELoss()
+    else:
+        criterion = nn.L1Loss()
+    print(f"loss: {args.loss}")
 
     trainer = TrainerMulti(
         loader_train=dataloader_train,
