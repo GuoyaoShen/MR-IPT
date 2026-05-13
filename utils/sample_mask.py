@@ -38,8 +38,9 @@ def center_crop_np(img, bounding):
     return img[slices]
 
 
-class RandomMask():
+class RandomMask:
     """Random column-wise strip mask."""
+
     def __init__(self, center_fraction, acceleration, size, seed=None):
         self.center_fraction = center_fraction
         self.acceleration = acceleration
@@ -60,13 +61,17 @@ class RandomMask():
 
             # create the mask
             num_low_freqs = int(round(num_cols * self.center_fraction))
-            prob = (num_cols / self.acceleration - num_low_freqs) / (num_cols - num_low_freqs)
+            prob = (num_cols / self.acceleration - num_low_freqs) / (
+                num_cols - num_low_freqs
+            )
             pad = (num_cols - num_low_freqs + 1) // 2
             mask = np.ones(self.size, dtype=np.float32)
             mask_fold = np.ones((self.size[0], 1, self.size[2]), dtype=np.float32)
 
             sequence = np.arange(num_cols)
-            mask_sequence = np.concatenate((sequence[0:pad], sequence[pad + num_low_freqs:num_cols]), axis=0)
+            mask_sequence = np.concatenate(
+                (sequence[0:pad], sequence[pad + num_low_freqs : num_cols]), axis=0
+            )
             r = np.random.permutation(mask_sequence.shape[0])
             mask_sequence = np.squeeze(mask_sequence[r[:, None]], axis=-1)
             num_mask_col = int(round((1 - prob) * len(mask_sequence)))
@@ -76,8 +81,9 @@ class RandomMask():
         return mask, mask_fold
 
 
-class RandomMask2D():
+class RandomMask2D:
     """Random pixel-wise 2D mask."""
+
     def __init__(self, center_fraction, acceleration, size, seed=None):
         self.center_fraction = center_fraction
         self.acceleration = acceleration
@@ -104,7 +110,9 @@ class RandomMask2D():
             idx[:, 1] = idx_1d % W
             idx[:, 0] = idx_1d // W
             idx = idx.reshape(H, W, 2)
-            idx = np.concatenate((idx[:, 0:pad, :], idx[:, pad + num_low_freqs:W, :]), axis=1)
+            idx = np.concatenate(
+                (idx[:, 0:pad, :], idx[:, pad + num_low_freqs : W, :]), axis=1
+            )
             row = np.random.permutation(idx.shape[1])
             num_mask_col = int(round((1 - prob) * len(row)))
             row = row[0:num_mask_col]
@@ -118,8 +126,9 @@ class RandomMask2D():
         return mask, mask_fold
 
 
-class EquiSpaceMask():
+class EquiSpaceMask:
     """Equi-spaced column-wise strip mask."""
+
     def __init__(self, center_fraction, acceleration, size, seed=None):
         self.center_fraction = center_fraction
         self.acceleration = acceleration
@@ -140,17 +149,23 @@ class EquiSpaceMask():
 
             # create the mask
             num_low_freqs = int(round(num_cols * self.center_fraction))
-            prob = (num_cols / self.acceleration - num_low_freqs) / (num_cols - num_low_freqs)
+            prob = (num_cols / self.acceleration - num_low_freqs) / (
+                num_cols - num_low_freqs
+            )
             pad = (num_cols - num_low_freqs + 1) // 2
             mask = np.ones(self.size, dtype=np.float32)
             mask_fold = np.ones((self.size[0], 1, self.size[2]), dtype=np.float32)
 
             sequence = np.arange(num_cols)
-            mask_sequence = np.concatenate((sequence[0:pad], sequence[pad + num_low_freqs:num_cols]), axis=0)
+            mask_sequence = np.concatenate(
+                (sequence[0:pad], sequence[pad + num_low_freqs : num_cols]), axis=0
+            )
             # r = np.random.permutation(mask_sequence.shape[0])
             # mask_sequence = np.squeeze(mask_sequence[r[:, None]], axis=-1)
             num_mask_col = int(round((1 - prob) * len(mask_sequence)))
-            idx_remove = np.round(np.linspace(0, len(mask_sequence) - 1, num_mask_col)).astype(int)
+            idx_remove = np.round(
+                np.linspace(0, len(mask_sequence) - 1, num_mask_col)
+            ).astype(int)
             # mask_sequence_keep = mask_sequence[0::self.acceleration]
             # mask_sequence_remove = np.setdiff1d(mask_sequence, mask_sequence_keep)
             mask_sequence_remove = mask_sequence[idx_remove]
@@ -161,16 +176,17 @@ class EquiSpaceMask():
 
 class RandomMaskGaussian1D:
     """1D Gaussian mask sampler wrapper."""
+
     def __init__(
-            self,
-            acceleration=4,
-            center_fraction=0.08,
-            size=(1, 256, 256),
-            seed=None,
-            mean=[0],
-            cov=[[1]],
-            concentration=3,
-            patch_size=2,
+        self,
+        acceleration=4,
+        center_fraction=0.08,
+        size=(1, 256, 256),
+        seed=None,
+        mean=[0],
+        cov=[[1]],
+        concentration=3,
+        patch_size=2,
     ):
         self.acceleration = acceleration
         self.center_fraction = center_fraction
@@ -195,14 +211,14 @@ class RandomMaskGaussian1D:
 
 
 def random_mask_gaussian_1D(
-        acceleration=4,
-        center_fraction=0.08,
-        size=(16, 320, 320),
-        seed=None,
-        mean=[0],
-        cov=[[1]],
-        concentration=3,
-        patch_size=4,
+    acceleration=4,
+    center_fraction=0.08,
+    size=(16, 320, 320),
+    seed=None,
+    mean=[0],
+    cov=[[1]],
+    concentration=3,
+    patch_size=4,
 ):
     """Create a 1D Gaussian subsampling mask.
 
@@ -267,11 +283,12 @@ def random_mask_gaussian_1D(
             mask = center_crop_np(mask, (crop_size, crop_size))
 
             # reset center square to unmasked
-            mask[:, pad: pad + num_low_freqs] = 1.0
+            mask[:, pad : pad + num_low_freqs] = 1.0
             masks_fold[i] = mask
             mask = torch.tensor(mask).unsqueeze(0).unsqueeze(0)
-            mask = torch.nn.functional.interpolate(mask, scale_factor=patch_size,
-                                                   mode='nearest')
+            mask = torch.nn.functional.interpolate(
+                mask, scale_factor=patch_size, mode="nearest"
+            )
             mask = mask.squeeze(0).squeeze(0)
             masks[i] = mask.numpy()
     return masks, masks_fold
@@ -279,16 +296,17 @@ def random_mask_gaussian_1D(
 
 class RandomMaskGaussian:
     """2D Gaussian mask sampler wrapper."""
+
     def __init__(
-            self,
-            acceleration=4,
-            center_fraction=0.08,
-            size=(1, 256, 256),
-            seed=None,
-            mean=(0, 0),
-            cov=[[1, 0], [0, 1]],
-            concentration=3,
-            patch_size=4,
+        self,
+        acceleration=4,
+        center_fraction=0.08,
+        size=(1, 256, 256),
+        seed=None,
+        mean=(0, 0),
+        cov=[[1, 0], [0, 1]],
+        concentration=3,
+        patch_size=4,
     ):
         self.acceleration = acceleration
         self.center_fraction = center_fraction
@@ -313,14 +331,14 @@ class RandomMaskGaussian:
 
 
 def random_mask_gaussian(
-        acceleration=4,
-        center_fraction=0.08,
-        size=(16, 320, 320),
-        seed=None,
-        mean=(0, 0),
-        cov=[[1, 0], [0, 1]],
-        concentration=3,
-        patch_size=4,
+    acceleration=4,
+    center_fraction=0.08,
+    size=(16, 320, 320),
+    seed=None,
+    mean=(0, 0),
+    cov=[[1, 0], [0, 1]],
+    concentration=3,
+    patch_size=4,
 ):
     """Create a 2D Gaussian subsampling mask.
 
@@ -385,11 +403,12 @@ def random_mask_gaussian(
             mask = center_crop_np(mask, (crop_size, crop_size))
 
             # reset center square to unmasked
-            mask[pad: pad + num_low_freqs, pad: pad + num_low_freqs] = 1.0
+            mask[pad : pad + num_low_freqs, pad : pad + num_low_freqs] = 1.0
             masks_fold[i] = mask
             mask = torch.tensor(mask).unsqueeze(0).unsqueeze(0)
-            mask = torch.nn.functional.interpolate(mask, scale_factor=patch_size,
-                                                   mode='nearest')
+            mask = torch.nn.functional.interpolate(
+                mask, scale_factor=patch_size, mode="nearest"
+            )
             mask = mask.squeeze(0).squeeze(0)
             masks[i] = mask.numpy()
     return masks, masks_fold

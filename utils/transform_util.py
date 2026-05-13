@@ -9,6 +9,7 @@ import operator
 
 # -------- FFT transform --------
 
+
 def fftc_np(image):
     """
     Orthogonal FFT2 transform image to kspace data, numpy.array to numpy.array.
@@ -44,7 +45,9 @@ def fftc_th(image):
     :return: th.Tensor of real with shape of (..., 2, h, w), kspace data with center low-frequency, keep dtype.
     """
     image = image.permute(0, 2, 3, 1).contiguous()
-    kspace = th.fft.fftshift(th.fft.fft2(th.view_as_complex(image), norm="ortho"), dim=(-1, -2))
+    kspace = th.fft.fftshift(
+        th.fft.fft2(th.view_as_complex(image), norm="ortho"), dim=(-1, -2)
+    )
     kspace = th.view_as_real(kspace).permute(0, 3, 1, 2).contiguous()
     return kspace
 
@@ -58,12 +61,15 @@ def ifftc_th(kspace):
     :return: th.Tensor of real with shape of (..., 2, h, w), mri image, keep dtype.
     """
     kspace = kspace.permute(0, 2, 3, 1).contiguous()
-    image = th.fft.ifft2(th.fft.ifftshift(th.view_as_complex(kspace), dim=(-1, -2)), norm="ortho")
+    image = th.fft.ifft2(
+        th.fft.ifftshift(th.view_as_complex(kspace), dim=(-1, -2)), norm="ortho"
+    )
     image = th.view_as_real(image).permute(0, 3, 1, 2).contiguous()
     return image
 
 
 # -------- dtype transform --------
+
 
 def complex2real_np(x):
     """
@@ -143,8 +149,8 @@ def pad_to_pool(x: th.tensor, num_layer: int, step_scale: int) -> th.tensor:
     H = x.shape[1]
     W = x.shape[2]
 
-    H_new = (step_scale ** num_layer) * round(H / (step_scale ** num_layer))
-    W_new = (step_scale ** num_layer) * round(W / (step_scale ** num_layer))
+    H_new = (step_scale**num_layer) * round(H / (step_scale**num_layer))
+    W_new = (step_scale**num_layer) * round(W / (step_scale**num_layer))
 
     x_shape = list(x.shape)
     x_shape[1] = H_new
@@ -152,12 +158,20 @@ def pad_to_pool(x: th.tensor, num_layer: int, step_scale: int) -> th.tensor:
     x_rescale = th.zeros(x_shape)
 
     # pad given tensor slightly to make it down-poolable
-    x_rescale[:, H_new // 2 - min(H_new, H) // 2: H_new // 2 + min(H_new, H) // 2,
-    W_new // 2 - min(W_new, W) // 2: W_new // 2 + min(W_new, W) // 2, :] \
-        = x[:, H // 2 - min(H_new, H) // 2: H // 2 + min(H_new, H) // 2,
-          W // 2 - min(W_new, W) // 2: W // 2 + min(W_new, W) // 2, :]
+    x_rescale[
+        :,
+        H_new // 2 - min(H_new, H) // 2 : H_new // 2 + min(H_new, H) // 2,
+        W_new // 2 - min(W_new, W) // 2 : W_new // 2 + min(W_new, W) // 2,
+        :,
+    ] = x[
+        :,
+        H // 2 - min(H_new, H) // 2 : H // 2 + min(H_new, H) // 2,
+        W // 2 - min(W_new, W) // 2 : W // 2 + min(W_new, W) // 2,
+        :,
+    ]
 
     return x_rescale
+
 
 def center_crop_with_pad(x: th.tensor, center_crop_h, center_crop_w) -> th.tensor:
     """
@@ -180,12 +194,18 @@ def center_crop_with_pad(x: th.tensor, center_crop_h, center_crop_w) -> th.tenso
     x_rescale = th.zeros(x_shape)
 
     # pad given tensor slightly to make it down-poolable
-    x_rescale[:, H_new // 2 - min(H_new, H) // 2: H_new // 2 + min(H_new, H) // 2,
-    W_new // 2 - min(W_new, W) // 2: W_new // 2 + min(W_new, W) // 2] \
-        = x[:, H // 2 - min(H_new, H) // 2: H // 2 + min(H_new, H) // 2,
-          W // 2 - min(W_new, W) // 2: W // 2 + min(W_new, W) // 2]
+    x_rescale[
+        :,
+        H_new // 2 - min(H_new, H) // 2 : H_new // 2 + min(H_new, H) // 2,
+        W_new // 2 - min(W_new, W) // 2 : W_new // 2 + min(W_new, W) // 2,
+    ] = x[
+        :,
+        H // 2 - min(H_new, H) // 2 : H // 2 + min(H_new, H) // 2,
+        W // 2 - min(W_new, W) // 2 : W // 2 + min(W_new, W) // 2,
+    ]
 
     return x_rescale
+
 
 def normalize_one_to_one(x: th.tensor) -> th.tensor:
     """
@@ -274,14 +294,20 @@ def cartersianToPolar(img, order=0):
     H, W, d = img.shape
 
     # initialize first channel, [H, W]
-    polarImage, ptSettings = polarTransform.convertToPolarImage(img[:, :, 0], order=order)
+    polarImage, ptSettings = polarTransform.convertToPolarImage(
+        img[:, :, 0], order=order
+    )
     polarImage = th.tensor(polarImage).unsqueeze(-1)  # [H, W, 1]
 
     for i in range(d):
         if i > 0:
             # [H, W]
-            polarImageTemp, _ = polarTransform.convertToPolarImage(img[:, :, i], order=order)
-            polarImage = th.cat((polarImage, th.tensor(polarImageTemp).unsqueeze(-1)), -1)  # [H, W, d]
+            polarImageTemp, _ = polarTransform.convertToPolarImage(
+                img[:, :, i], order=order
+            )
+            polarImage = th.cat(
+                (polarImage, th.tensor(polarImageTemp).unsqueeze(-1)), -1
+            )  # [H, W, d]
 
     return polarImage, ptSettings
 
@@ -308,15 +334,20 @@ def polarToCartersian(polarImage, order=0):
     H, W, d = polarImage.shape
 
     # initialize first channel, [H, W]
-    cartesianImage, ptSettings = polarTransform.convertToCartesianImage(polarImage[:, :, 0], order=order)
+    cartesianImage, ptSettings = polarTransform.convertToCartesianImage(
+        polarImage[:, :, 0], order=order
+    )
     cartesianImage = th.tensor(cartesianImage).unsqueeze(-1)  # [H, W, 1]
 
     for i in range(d):
         if i > 0:
             # [H, W]
-            cartesianImageTemp, _ = polarTransform.convertToCartesianImage(polarImage[:, :, i], order=order)
-            cartesianImage = th.cat((cartesianImage, th.tensor(cartesianImageTemp).unsqueeze(-1)),
-                                    -1)  # [H, W, d]
+            cartesianImageTemp, _ = polarTransform.convertToCartesianImage(
+                polarImage[:, :, i], order=order
+            )
+            cartesianImage = th.cat(
+                (cartesianImage, th.tensor(cartesianImageTemp).unsqueeze(-1)), -1
+            )  # [H, W, d]
 
     return cartesianImage, ptSettings
 
@@ -349,9 +380,12 @@ def polarToCartersian_given_setting(polarImage, ptSettings, order=0):
     for i in range(d):
         if i > 0:
             # [H, W]
-            cartesianImageTemp = ptSettings.convertToCartesianImage(polarImage[:, :, i], order=order)
-            cartesianImage = th.cat((cartesianImage, th.tensor(cartesianImageTemp).unsqueeze(-1)),
-                                    -1)  # [H, W, d]
+            cartesianImageTemp = ptSettings.convertToCartesianImage(
+                polarImage[:, :, i], order=order
+            )
+            cartesianImage = th.cat(
+                (cartesianImage, th.tensor(cartesianImageTemp).unsqueeze(-1)), -1
+            )  # [H, W, d]
 
     return cartesianImage
 
