@@ -36,8 +36,8 @@ class SSIM(nn.Module):
         super().__init__()
         self.win_size = win_size
         self.k1, self.k2 = k1, k2
-        self.register_buffer("w", torch.ones(1, 1, win_size, win_size) / win_size ** 2)
-        NP = win_size ** 2
+        self.register_buffer("w", torch.ones(1, 1, win_size, win_size) / win_size**2)
+        NP = win_size**2
         self.cov_norm = NP / (NP - 1)
 
     def forward(self, X: torch.Tensor, Y: torch.Tensor, data_range: torch.Tensor):
@@ -67,7 +67,7 @@ class SSIM(nn.Module):
         A1, A2, B1, B2 = (
             2 * ux * uy + C1,
             2 * vxy + C2,
-            ux ** 2 + uy ** 2 + C1,
+            ux**2 + uy**2 + C1,
             vx + vy + C2,
         )
         D = B1 * B2
@@ -83,7 +83,9 @@ class PSNR(nn.Module):
     Returns one PSNR value per batch item.
     """
 
-    def __init__(self, ):
+    def __init__(
+        self,
+    ):
         super().__init__()
 
     def forward(self, X: torch.Tensor, Y: torch.Tensor, data_range: torch.Tensor):
@@ -100,7 +102,7 @@ class PSNR(nn.Module):
         # Y is target
         err = rearrange((X - Y) ** 2, "b c h w -> b (c h w)")
         mse = torch.mean(err, dim=1)
-        return (10 * torch.log10(data_range ** 2 / mse))
+        return 10 * torch.log10(data_range**2 / mse)
 
 
 class NMSE(nn.Module):
@@ -109,7 +111,9 @@ class NMSE(nn.Module):
     Returns one NMSE value per batch item.
     """
 
-    def __init__(self, ):
+    def __init__(
+        self,
+    ):
         super().__init__()
 
     def forward(self, X, Y):
@@ -124,6 +128,6 @@ class NMSE(nn.Module):
         """
         # Y is target
         err = rearrange(Y - X, "b c h w -> b (c h w)")
-        err = (err ** 2).sum(dim=-1)
+        err = (err**2).sum(dim=-1)
         den = (rearrange(Y, "b c h w -> b (c h w)") ** 2).sum(dim=-1)
         return err / den

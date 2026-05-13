@@ -9,9 +9,6 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from mript_train import build_mask_func_list
-from utils.radimgnet_loader_ipt import create_radimgnet_dataloader_multi
-
 
 # %%
 def _to_2d(x):
@@ -20,7 +17,9 @@ def _to_2d(x):
     return x
 
 
-def save_sample_figure(image_input, image_target, mask, title, out_path=None, show=False):
+def save_sample_figure(
+    image_input, image_target, mask, title, out_path=None, show=False
+):
     img_in = _to_2d(image_input.detach().cpu())
     img_tg = _to_2d(image_target.detach().cpu())
     img_mask = _to_2d(mask.detach().cpu())
@@ -52,8 +51,14 @@ def save_sample_figure(image_input, image_target, mask, title, out_path=None, sh
 
 # %%
 def parse_args(argv=None):
-    parser = argparse.ArgumentParser(description="Preview MRIPT dataloader samples and save example images")
-    parser.add_argument("--dataset-path", type=str, default="/bigdata/RadImageNet/rin2d/radiology_ai/MR/")
+    parser = argparse.ArgumentParser(
+        description="Preview MRIPT dataloader samples and save example images"
+    )
+    parser.add_argument(
+        "--dataset-path",
+        type=str,
+        default="/bigdata/RadImageNet/rin2d/radiology_ai/MR/",
+    )
     parser.add_argument("--input-height", type=int, default=128)
     parser.add_argument("--input-width", type=int, default=128)
     parser.add_argument("--val-split", type=float, default=0.1)
@@ -62,9 +67,20 @@ def parse_args(argv=None):
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--num-batches", type=int, default=1)
     parser.add_argument("--max-samples-per-batch", type=int, default=4)
-    parser.add_argument("--output-dir", type=str, default=str(ROOT_DIR / "tests" / "debug_loader_preview"), help="Directory where preview images are saved")
-    parser.add_argument("--show", action="store_true", help="Show figures inline (useful in Interactive Window)")
-    parser.add_argument("--no-save", action="store_true", help="Do not save preview images to disk")
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default=str(ROOT_DIR / "tests" / "debug_loader_preview"),
+        help="Directory where preview images are saved",
+    )
+    parser.add_argument(
+        "--show",
+        action="store_true",
+        help="Show figures inline (useful in Interactive Window)",
+    )
+    parser.add_argument(
+        "--no-save", action="store_true", help="Do not save preview images to disk"
+    )
     if argv is None:
         # In Jupyter/Interactive Window, sys.argv often contains extra kernel flags.
         # Ignore unknown args so this utility can run directly in cells.
@@ -80,6 +96,9 @@ def get_default_args():
 
 # %%
 def run_preview(args):
+    from mript_train import build_mask_func_list
+    from utils.radimgnet_loader_ipt import create_radimgnet_dataloader_multi
+
     if args.dataset_path is None:
         raise ValueError("dataset_path is required")
 
@@ -92,7 +111,9 @@ def run_preview(args):
         out_dir = Path(args.output_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
 
-    scales, func_list = build_mask_func_list(args.input_height, args.input_width, seed=args.seed)
+    scales, func_list = build_mask_func_list(
+        args.input_height, args.input_width, seed=args.seed
+    )
 
     loader = create_radimgnet_dataloader_multi(
         data_dir=str(dataset_path),
@@ -131,7 +152,10 @@ def run_preview(args):
 
             out_path = None
             if out_dir is not None:
-                out_path = out_dir / f"batch{batch_idx:03d}_sample{i:02d}_type{type_i}_level{level_i}.png"
+                out_path = (
+                    out_dir
+                    / f"batch{batch_idx:03d}_sample{i:02d}_type{type_i}_level{level_i}.png"
+                )
 
             title = f"batch={batch_idx} sample={i} type={type_i} level={level_i}"
             save_sample_figure(

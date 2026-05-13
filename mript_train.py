@@ -5,7 +5,6 @@ from pathlib import Path
 import torch
 import torch.nn as nn
 
-from utils.help_func import create_path
 from modeling.image_decoder import ImageDecoderMulti
 from modeling.image_encoder import ImageEncoderViT
 from modeling.losses import MixedL1GradientLoss
@@ -14,6 +13,7 @@ from modeling.mript_trainer import TrainerMulti
 from modeling.prompt_encoder import PromptEncoderMulti
 from modeling.transformer import TwoWayTransformer
 from utils.data_transform import DataTransform
+from utils.help_func import load_train_config, setup_save_dir
 from utils.radimgnet_loader_ipt import create_radimgnet_dataloader_multi
 from utils.sample_mask import (
     EquiSpaceMask,
@@ -21,6 +21,21 @@ from utils.sample_mask import (
     RandomMaskGaussian,
     RandomMaskGaussian1D,
 )
+
+
+DEFAULT_CONFIG_PATH = Path("configs/radimagenet_pretrain.yaml")
+
+
+def parse_args():
+    """Parse CLI arguments for YAML-driven training."""
+    parser = argparse.ArgumentParser(description="Train MRIPT from a YAML config file")
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=DEFAULT_CONFIG_PATH,
+        help="Path to training YAML config file",
+    )
+    return parser.parse_args()
 
 
 def build_mask_func_list(input_height, input_width, seed=None):
@@ -32,36 +47,141 @@ def build_mask_func_list(input_height, input_width, seed=None):
 
     # Cartesian random masks
     random_masks = [
-        DataTransform(RandomMask(center_fraction=frac_c0, acceleration=acc0, size=[1, input_height, input_width], seed=seed)),
-        DataTransform(RandomMask(center_fraction=frac_c1, acceleration=acc1, size=[1, input_height, input_width], seed=seed)),
-        DataTransform(RandomMask(center_fraction=frac_c2, acceleration=acc2, size=[1, input_height, input_width], seed=seed)),
-        DataTransform(RandomMask(center_fraction=frac_c3, acceleration=acc3, size=[1, input_height, input_width], seed=seed)),
-        DataTransform(RandomMask(center_fraction=frac_c4, acceleration=acc4, size=[1, input_height, input_width], seed=seed)),
+        DataTransform(
+            RandomMask(
+                center_fraction=frac_c0,
+                acceleration=acc0,
+                size=[1, input_height, input_width],
+                seed=seed,
+            )
+        ),
+        DataTransform(
+            RandomMask(
+                center_fraction=frac_c1,
+                acceleration=acc1,
+                size=[1, input_height, input_width],
+                seed=seed,
+            )
+        ),
+        DataTransform(
+            RandomMask(
+                center_fraction=frac_c2,
+                acceleration=acc2,
+                size=[1, input_height, input_width],
+                seed=seed,
+            )
+        ),
+        DataTransform(
+            RandomMask(
+                center_fraction=frac_c3,
+                acceleration=acc3,
+                size=[1, input_height, input_width],
+                seed=seed,
+            )
+        ),
+        DataTransform(
+            RandomMask(
+                center_fraction=frac_c4,
+                acceleration=acc4,
+                size=[1, input_height, input_width],
+                seed=seed,
+            )
+        ),
     ]
 
     # Cartesian equi-space masks
     equispace_masks = [
-        DataTransform(EquiSpaceMask(center_fraction=frac_c0, acceleration=acc0, size=[1, input_height, input_width], seed=seed)),
-        DataTransform(EquiSpaceMask(center_fraction=frac_c1, acceleration=acc1, size=[1, input_height, input_width], seed=seed)),
-        DataTransform(EquiSpaceMask(center_fraction=frac_c2, acceleration=acc2, size=[1, input_height, input_width], seed=seed)),
-        DataTransform(EquiSpaceMask(center_fraction=frac_c3, acceleration=acc3, size=[1, input_height, input_width], seed=seed)),
-        DataTransform(EquiSpaceMask(center_fraction=frac_c4, acceleration=acc4, size=[1, input_height, input_width], seed=seed)),
+        DataTransform(
+            EquiSpaceMask(
+                center_fraction=frac_c0,
+                acceleration=acc0,
+                size=[1, input_height, input_width],
+                seed=seed,
+            )
+        ),
+        DataTransform(
+            EquiSpaceMask(
+                center_fraction=frac_c1,
+                acceleration=acc1,
+                size=[1, input_height, input_width],
+                seed=seed,
+            )
+        ),
+        DataTransform(
+            EquiSpaceMask(
+                center_fraction=frac_c2,
+                acceleration=acc2,
+                size=[1, input_height, input_width],
+                seed=seed,
+            )
+        ),
+        DataTransform(
+            EquiSpaceMask(
+                center_fraction=frac_c3,
+                acceleration=acc3,
+                size=[1, input_height, input_width],
+                seed=seed,
+            )
+        ),
+        DataTransform(
+            EquiSpaceMask(
+                center_fraction=frac_c4,
+                acceleration=acc4,
+                size=[1, input_height, input_width],
+                seed=seed,
+            )
+        ),
     ]
 
     # 1D Gaussian masks
     gaussian_1d_masks = [
-        DataTransform(RandomMaskGaussian1D(center_fraction=frac_c0, acceleration=acc0, size=[1, input_height, input_width], seed=seed)),
-        DataTransform(RandomMaskGaussian1D(center_fraction=frac_c1, acceleration=acc1, size=[1, input_height, input_width], seed=seed)),
-        DataTransform(RandomMaskGaussian1D(center_fraction=frac_c2, acceleration=acc2, size=[1, input_height, input_width], seed=seed)),
-        DataTransform(RandomMaskGaussian1D(center_fraction=frac_c3, acceleration=acc3, size=[1, input_height, input_width], seed=seed)),
-        DataTransform(RandomMaskGaussian1D(center_fraction=frac_c4, acceleration=acc4, size=[1, input_height, input_width], seed=seed)),
+        DataTransform(
+            RandomMaskGaussian1D(
+                center_fraction=frac_c0,
+                acceleration=acc0,
+                size=[1, input_height, input_width],
+                seed=seed,
+            )
+        ),
+        DataTransform(
+            RandomMaskGaussian1D(
+                center_fraction=frac_c1,
+                acceleration=acc1,
+                size=[1, input_height, input_width],
+                seed=seed,
+            )
+        ),
+        DataTransform(
+            RandomMaskGaussian1D(
+                center_fraction=frac_c2,
+                acceleration=acc2,
+                size=[1, input_height, input_width],
+                seed=seed,
+            )
+        ),
+        DataTransform(
+            RandomMaskGaussian1D(
+                center_fraction=frac_c3,
+                acceleration=acc3,
+                size=[1, input_height, input_width],
+                seed=seed,
+            )
+        ),
+        DataTransform(
+            RandomMaskGaussian1D(
+                center_fraction=frac_c4,
+                acceleration=acc4,
+                size=[1, input_height, input_width],
+                seed=seed,
+            )
+        ),
     ]
 
     # 2D Gaussian masks
     gaussian_2d_masks = [
         DataTransform(
             RandomMaskGaussian(
-                center_fraction=frac_c0 ** 0.5,
+                center_fraction=frac_c0**0.5,
                 acceleration=acc0,
                 size=[1, input_height, input_width],
                 seed=seed,
@@ -70,7 +190,7 @@ def build_mask_func_list(input_height, input_width, seed=None):
         ),
         DataTransform(
             RandomMaskGaussian(
-                center_fraction=frac_c1 ** 0.5,
+                center_fraction=frac_c1**0.5,
                 acceleration=acc1,
                 size=[1, input_height, input_width],
                 seed=seed,
@@ -79,7 +199,7 @@ def build_mask_func_list(input_height, input_width, seed=None):
         ),
         DataTransform(
             RandomMaskGaussian(
-                center_fraction=frac_c2 ** 0.5,
+                center_fraction=frac_c2**0.5,
                 acceleration=acc2,
                 size=[1, input_height, input_width],
                 seed=seed,
@@ -88,7 +208,7 @@ def build_mask_func_list(input_height, input_width, seed=None):
         ),
         DataTransform(
             RandomMaskGaussian(
-                center_fraction=frac_c3 ** 0.5,
+                center_fraction=frac_c3**0.5,
                 acceleration=acc3,
                 size=[1, input_height, input_width],
                 seed=seed,
@@ -97,7 +217,7 @@ def build_mask_func_list(input_height, input_width, seed=None):
         ),
         DataTransform(
             RandomMaskGaussian(
-                center_fraction=frac_c4 ** 0.5,
+                center_fraction=frac_c4**0.5,
                 acceleration=acc4,
                 size=[1, input_height, input_width],
                 seed=seed,
@@ -176,97 +296,109 @@ def build_model(scales, input_height, mode, device):
     return model
 
 
-def parse_args():
-    parser = argparse.ArgumentParser(description="Train MRIPT from script converted from mript_train.ipynb")
-    parser.add_argument("--dataset-path", type=str, default="/bigdata/RadImageNet/rin2d/radiology_ai/MR/brain/normal")
-    parser.add_argument("--device", type=str, default="cuda:0", help="Torch device string, e.g. cpu, cuda:0, cuda:1")
-    parser.add_argument("--input-height", type=int, default=128)
-    parser.add_argument("--input-width", type=int, default=128)
-    parser.add_argument("--val-split", type=float, default=0.1)
-    parser.add_argument("--batch-size", type=int, default=6)
-    parser.add_argument("--num-workers", type=int, default=8)
-    parser.add_argument("--prefetch-factor", type=int, default=2)
-    parser.add_argument("--no-persistent-workers", action="store_true", help="Disable DataLoader persistent workers")
-    parser.add_argument("--use-precomputed-mask", action="store_true", default=False, help="Precompute and reuse masks per type/level to reduce loader overhead")
-    parser.add_argument("--seed", type=int, default=None)
-    parser.add_argument("--learning-rate", type=float, default=1e-5)
-    parser.add_argument(
-        "--loss",
-        type=str,
-        default="l1",
-        choices=["l1", "l2", "mixed_l1_grad"],
-        help="Loss type",
-    )
-    parser.add_argument("--num-epoch", type=int, default=5)
-    parser.add_argument("--mode", type=str, default="type", choices=["type", "level", "combine"])
-    parser.add_argument("--path-model", type=str, default="./saved_models/", help="Directory where model checkpoints are saved")
-    parser.add_argument("--no-save", action="store_true", help="Disable checkpoint saving in TrainerMulti")
-    return parser.parse_args()
+def load_model_checkpoint(model, resume_from, device):
+    """Optionally load model weights from checkpoint path.
+
+    This loads model parameters only. Optimizer, scheduler, epoch counters,
+    and all other runtime settings continue to use the current YAML config.
+    """
+    if resume_from is None:
+        return
+
+    checkpoint_path = Path(resume_from)
+    if not checkpoint_path.exists():
+        raise FileNotFoundError(f"resume_from checkpoint not found: {checkpoint_path}")
+
+    checkpoint = torch.load(checkpoint_path, map_location=device)
+    if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
+        state_dict = checkpoint["model_state_dict"]
+    else:
+        state_dict = checkpoint
+
+    model.load_state_dict(state_dict)
+    print(f"Loaded model weights from: {checkpoint_path}")
 
 
 def main():
     args = parse_args()
+    config = load_train_config(args.config)
+    print(f"Loaded config: {config['config_path']}")
 
-    if not Path(args.dataset_path).exists():
-        raise FileNotFoundError(f"Dataset path not found: {args.dataset_path}")
+    if not Path(config["dataset_path"]).exists():
+        raise FileNotFoundError(f"Dataset path not found: {config['dataset_path']}")
 
-    scales, func_list = build_mask_func_list(args.input_height, args.input_width, seed=args.seed)
+    scales, func_list = build_mask_func_list(
+        config["input_height"],
+        config["input_width"],
+        seed=config["seed"],
+    )
 
     dataloader_train = create_radimgnet_dataloader_multi(
-        data_dir=args.dataset_path,
+        data_dir=config["dataset_path"],
         random_seed=0,
-        val_split=args.val_split,
-        image_size=(args.input_height, args.input_width),
-        batch_size=args.batch_size,
+        val_split=config["val_split"],
+        image_size=(config["input_height"], config["input_width"]),
+        batch_size=config["batch_size"],
         is_distributed=False,
         is_train=True,
         scales=scales,
         func_list=func_list,
-        num_workers=args.num_workers,
+        num_workers=config["num_workers"],
         fix_scale_idx=None,
-        prefetch_factor=args.prefetch_factor,
-        persistent_workers=not args.no_persistent_workers,
-        use_precomputed_mask=args.use_precomputed_mask,
+        prefetch_factor=config["prefetch_factor"],
+        persistent_workers=config["persistent_workers"],
+        use_precomputed_mask=config["use_precomputed_mask"],
     )
 
     dataloader_test = create_radimgnet_dataloader_multi(
-        data_dir=args.dataset_path,
+        data_dir=config["dataset_path"],
         random_seed=0,
-        val_split=args.val_split,
-        image_size=(args.input_height, args.input_width),
+        val_split=config["val_split"],
+        image_size=(config["input_height"], config["input_width"]),
         batch_size=1,
         is_distributed=False,
         is_train=False,
         scales=scales,
         func_list=func_list,
-        num_workers=args.num_workers,
+        num_workers=config["num_workers"],
         fix_scale_idx=None,
-        prefetch_factor=args.prefetch_factor,
-        persistent_workers=not args.no_persistent_workers,
-        use_precomputed_mask=args.use_precomputed_mask,
+        prefetch_factor=config["prefetch_factor"],
+        persistent_workers=config["persistent_workers"],
+        use_precomputed_mask=config["use_precomputed_mask"],
     )
 
     print(torch.__version__)
-    if args.device.startswith("cuda") and not torch.cuda.is_available():
-        print(f"CUDA unavailable, fallback from {args.device} to cpu")
+    if config["device"].startswith("cuda") and not torch.cuda.is_available():
+        print(f"CUDA unavailable, fallback from {config['device']} to cpu")
         device = torch.device("cpu")
     else:
-        device = torch.device(args.device)
+        device = torch.device(config["device"])
     print("device:", device)
 
-    model = build_model(scales=scales, input_height=args.input_height, mode=args.mode, device=device)
+    model = build_model(
+        scales=scales,
+        input_height=config["input_height"],
+        mode=config["mode"],
+        device=device,
+    )
+    model = model.to(device)
+    load_model_checkpoint(model, config["resume_from"], device)
 
-    create_path(args.path_model)
-    print("PATH_MODEL:", args.path_model)
+    run_path_model = setup_save_dir(config)
+    print("PATH_MODEL:", run_path_model)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate, amsgrad=False)
-    if args.loss == "mixed_l1_grad":
+    optimizer = torch.optim.Adam(
+        model.parameters(),
+        lr=config["learning_rate"],
+        amsgrad=False,
+    )
+    if config["loss"] == "mixed_l1_grad":
         criterion = MixedL1GradientLoss(gradient_weight=0.1)
-    elif args.loss == "l2":
+    elif config["loss"] == "l2":
         criterion = nn.MSELoss()
     else:
         criterion = nn.L1Loss()
-    print(f"loss: {args.loss}")
+    print(f"loss: {config['loss']}")
 
     trainer = TrainerMulti(
         loader_train=dataloader_train,
@@ -274,14 +406,12 @@ def main():
         my_model=model,
         my_loss=criterion,
         optimizer=optimizer,
-        PATH_MODEL=args.path_model,
+        PATH_MODEL=run_path_model,
         device=device,
-        NUM_EPOCH=args.num_epoch,
-        RESUME_EPOCH=0,
-        if_save=not args.no_save,
+        NUM_EPOCH=config["num_epochs"],
     )
 
-    trainer.train(show_step=1, show_test=True)
+    trainer.train()
 
 
 if __name__ == "__main__":
